@@ -6,85 +6,126 @@
 <title>Registro de Horarios</title>
 
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1976d2">
+<meta name="theme-color" content="#6750A4">
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
+:root{
+  --primary:#6750A4;
+  --surface:#FFFFFF;
+  --bg:#F4EFF4;
+  --danger:#B3261E;
+}
+
 body{
-  font-family: Arial, sans-serif;
-  max-width: 500px;
-  margin: auto;
-  padding: 20px;
-  background: #f5f5f5;
+  font-family: system-ui, -apple-system, Roboto, sans-serif;
+  background:var(--bg);
+  margin:0;
+  padding:16px;
 }
-h2{
-  text-align: center;
-  color: #1976d2;
+
+.app{
+  max-width:420px;
+  margin:auto;
 }
+
+h1{
+  text-align:center;
+  color:var(--primary);
+  margin-bottom:16px;
+}
+
+.card{
+  background:var(--surface);
+  border-radius:16px;
+  padding:16px;
+  box-shadow:0 2px 8px rgba(0,0,0,.1);
+  margin-bottom:16px;
+}
+
 label{
-  display:block;
-  margin-top:15px;
+  font-size:14px;
+  color:#555;
 }
-input, button{
+
+input{
   width:100%;
   padding:10px;
-  margin-top:5px;
   font-size:16px;
+  margin-top:4px;
+  margin-bottom:12px;
+  border-radius:8px;
+  border:1px solid #ccc;
 }
+
 button{
-  background:#1976d2;
-  color:white;
+  width:100%;
+  padding:12px;
+  font-size:16px;
   border:none;
-  border-radius:4px;
-  margin-top:15px;
+  border-radius:24px;
+  cursor:pointer;
 }
-button.secondary{
-  background:#555;
+
+.btn-primary{
+  background:var(--primary);
+  color:white;
 }
-.item{
-  background:white;
-  padding:10px;
-  margin-top:10px;
-  border-radius:4px;
+
+.btn-secondary{
+  background:#444;
+  color:white;
+  margin-top:8px;
+}
+
+.registro{
   font-size:14px;
+  padding:8px 0;
+  border-bottom:1px solid #eee;
 }
-.item button{
+
+.registro button{
   width:auto;
-  padding:5px 10px;
   font-size:12px;
-  margin-right:5px;
+  padding:6px 10px;
+  margin-right:4px;
 }
+
 .borrar{
-  background:#d32f2f;
+  background:var(--danger);
+  color:white;
 }
 </style>
 </head>
 
 <body>
 
-<h2>Registro de Horarios</h2>
+<div class="app">
+<h1>Registro de Horarios</h1>
 
-<label>Fecha
+<div class="card">
+<label>Fecha</label>
 <input type="date" id="fecha">
-</label>
 
-<label>Entrada (24 hs)
+<label>Ingreso</label>
 <input type="time" id="entrada">
-</label>
 
-<label>Salida (24 hs)
+<label>Egreso</label>
 <input type="time" id="salida">
-</label>
 
-<button onclick="guardar()">Guardar</button>
-<button class="secondary" onclick="generarReporte()">Generar Excel</button>
+<button class="btn-primary" onclick="guardar()">Guardar</button>
+<button class="btn-secondary" onclick="generarReporte()">Generar Excel</button>
+</div>
 
-<div id="lista"></div>
+<div class="card" id="lista"></div>
+</div>
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js');
+  navigator.serviceWorker.register('/registro-horarios/sw.js', {
+    scope: '/registro-horarios/'
+  });
 }
 
 let registros = JSON.parse(localStorage.getItem('registros') || '[]');
@@ -93,40 +134,21 @@ const lista = document.getElementById('lista');
 render();
 
 function guardar(){
-  const fecha = fechaEl().value;
-  const entrada = entradaEl().value;
-  const salida = salidaEl().value;
+  const f=fecha.value, e=entrada.value, s=salida.value;
+  if(!f||!e||!s) return alert('Complete todos los campos');
 
-  if(!fecha || !entrada || !salida){
-    alert('Complete todos los campos');
-    return;
-  }
-
-  registros.push({
-    fecha,
-    entrada,
-    salida,
-    duracion: duracion(entrada, salida)
-  });
-
+  registros.push({fecha:f, entrada:e, salida:s, duracion:duracion(e,s)});
   localStorage.setItem('registros', JSON.stringify(registros));
   render();
 }
 
 function editar(i){
-  const r = registros[i];
-  const f = prompt('Fecha', r.fecha);
-  const e = prompt('Entrada HH:MM', r.entrada);
-  const s = prompt('Salida HH:MM', r.salida);
-  if(!f || !e || !s) return;
-
-  registros[i] = {
-    fecha: f,
-    entrada: e,
-    salida: s,
-    duracion: duracion(e,s)
-  };
-
+  const r=registros[i];
+  const f=prompt('Fecha',r.fecha);
+  const e=prompt('Ingreso',r.entrada);
+  const s=prompt('Egreso',r.salida);
+  if(!f||!e||!s) return;
+  registros[i]={fecha:f,entrada:e,salida:s,duracion:duracion(e,s)};
   localStorage.setItem('registros', JSON.stringify(registros));
   render();
 }
@@ -139,12 +161,11 @@ function borrar(i){
 }
 
 function render(){
-  lista.innerHTML = '<h3>Registros</h3>';
+  lista.innerHTML='<b>Registros</b>';
   registros.forEach((r,i)=>{
-    lista.innerHTML += `
-    <div class="item">
-      ${r.fecha} | ${r.entrada} - ${r.salida} → ${r.duracion}
-      <br>
+    lista.innerHTML+=`
+    <div class="registro">
+      ${r.fecha} | ${r.entrada} - ${r.salida} → ${r.duracion}<br>
       <button onclick="editar(${i})">Editar</button>
       <button class="borrar" onclick="borrar(${i})">Borrar</button>
     </div>`;
@@ -161,51 +182,28 @@ function duracion(e,s){
 }
 
 function generarReporte(){
-  if(registros.length===0){
-    alert('No hay registros');
-    return;
-  }
-
-  const diario={}, semanal={}, mensual={};
-
-  registros.forEach(r=>{
-    const [h,m]=r.duracion.split(':').map(Number);
-    const min=h*60+m;
-
-    if(!diario[r.fecha]) diario[r.fecha]={min:0};
-    diario[r.fecha].min+=min;
-
-    const d=new Date(r.fecha);
-    const lunes=new Date(d);
-    lunes.setDate(d.getDate()-(d.getDay()||7)+1);
-    const sem=lunes.toISOString().slice(0,10);
-    semanal[sem]=(semanal[sem]||0)+min;
-
-    const mes=r.fecha.slice(0,7);
-    mensual[mes]=(mensual[mes]||0)+min;
-  });
+  if(registros.length===0) return alert('No hay datos');
 
   const wb=XLSX.utils.book_new();
 
+  /* 🔹 NUEVA HOJA: DETALLE POR REGISTRO */
+  const detalle=[['Fecha','Ingreso','Egreso','Total']];
+  registros.forEach(r=>{
+    detalle.push([r.fecha,r.entrada,r.salida,r.duracion]);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(detalle),'Detalle por registro');
+
+  /* 🔹 DETALLE DIARIO */
+  const diario={};
+  registros.forEach(r=>{
+    const [h,m]=r.duracion.split(':').map(Number);
+    diario[r.fecha]=(diario[r.fecha]||0)+(h*60+m);
+  });
   const shDia=[['Fecha','Total del día']];
   Object.keys(diario).sort().forEach(f=>{
-    const t=diario[f].min;
-    shDia.push([f,hhmm(t)]);
+    shDia.push([f,hhmm(diario[f])]);
   });
-
-  const shSem=[['Semana','Total']];
-  Object.keys(semanal).sort().forEach(s=>{
-    shSem.push([s,hhmm(semanal[s])]);
-  });
-
-  const shMes=[['Mes','Total']];
-  Object.keys(mensual).sort().forEach(m=>{
-    shMes.push([m,hhmm(mensual[m])]);
-  });
-
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(shDia),'Detalle diario');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(shSem),'Resumen semanal');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(shMes),'Resumen mensual');
 
   XLSX.writeFile(wb,'reporte_horarios.xlsx');
 }
@@ -213,10 +211,6 @@ function generarReporte(){
 function hhmm(min){
   return String(Math.floor(min/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0');
 }
-
-function fechaEl(){ return document.getElementById('fecha'); }
-function entradaEl(){ return document.getElementById('entrada'); }
-function salidaEl(){ return document.getElementById('salida'); }
 </script>
 
 </body>
