@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registro de Horarios</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1976d2">
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+body{
+  font-family: Arial, sans-serif;
+  max-width: 500px;
+  margin: auto;
+  padding: 20px;
+  background: #f5f5f5;
+}
+h2{
+  text-align: center;
+  color: #1976d2;
+}
+label{
+  display:block;
+  margin-top:15px;
+}
+input, button{
+  width:100%;
+  padding:10px;
+  margin-top:5px;
+  font-size:16px;
+}
+button{
+  background:#1976d2;
+  color:white;
+  border:none;
+  border-radius:4px;
+  margin-top:15px;
+}
+button.secondary{
+  background:#555;
+}
+.item{
+  background:white;
+  padding:10px;
+  margin-top:10px;
+  border-radius:4px;
+  font-size:14px;
+}
+.item button{
+  width:auto;
+  padding:5px 10px;
+  font-size:12px;
+  margin-right:5px;
+}
+.borrar{
+  background:#d32f2f;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Registro de Horarios</h2>
+
+<label>Fecha
+<input type="date" id="fecha">
+</label>
+
+<label>Entrada (24 hs)
+<input type="time" id="entrada">
+</label>
+
+<label>Salida (24 hs)
+<input type="time" id="salida">
+</label>
+
+<button onclick="guardar()">Guardar</button>
+<button class="secondary" onclick="generarReporte()">Generar Excel</button>
+
+<div id="lista"></div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js');
+}
+
+let registros = JSON.parse(localStorage.getItem('registros') || '[]');
+const lista = document.getElementById('lista');
+
+render();
+
+function guardar(){
+  const fecha = fechaEl().value;
+  const entrada = entradaEl().value;
+  const salida = salidaEl().value;
+
+  if(!fecha || !entrada || !salida){
+    alert('Complete todos los campos');
+    return;
+  }
+
+  registros.push({
+    fecha,
+    entrada,
+    salida,
+    duracion: duracion(entrada, salida)
+  });
+
+  localStorage.setItem('registros', JSON.stringify(registros));
+  render();
+}
+
+function editar(i){
+  const r = registros[i];
+  const f = prompt('Fecha', r.fecha);
+  const e = prompt('Entrada HH:MM', r.entrada);
+  const s = prompt('Salida HH:MM', r.salida);
+  if(!f || !e || !s) return;
+
+  registros[i] = {
+    fecha: f,
+    entrada: e,
+    salida: s,
+    duracion: duracion(e,s)
+  };
+
+  localStorage.setItem('registros', JSON.stringify(registros));
+  render();
+}
+
+function borrar(i){
+  if(!confirm('Eliminar registro?')) return;
+  registros.splice(i,1);
+  localStorage.setItem('registros', JSON.stringify(registros));
+  render();
+}
+
+function render(){
+  lista.innerHTML = '<h3>Registros</h3>';
+  registros.forEach((r,i)=>{
+    lista.innerHTML += `
+    <div class="item">
+      ${r.fecha} | ${r.entrada} - ${r.salida} → ${r.duracion}
+      <br>
+      <button onclick="editar(${i})">Editar</button>
+      <button class="borrar" onclick="borrar(${i})">Borrar</button>
+    </div>`;
+  });
+}
+
+function duracion(e,s){
+  const [h1,m1]=e.split(':').map(Number);
+  const [h2,m2]=s.split(':').map(Number);
+  let a=h1*60+m1, b=h2*60+m2;
+  if(b<a) b+=1440;
+  const d=b-a;
+  return String(Math.floor(d/60)).padStart(2,'0')+':'+String(d%60).padStart(2,'0');
+}
+
+function generarReporte(){
+  if(registros.length===0){
+    alert('No hay registros');
+    return;
+  }
+
+  const diario={}, semanal={}, mensual={};
+
+  registros.forEach(r=>{
+    const [h,m]=r.duracion.split(':').map(Number);
+    const min=h*60+m;
+
+    if(!diario[r.fecha]) diario[r.fecha]={min:0};
+    diario[r.fecha].min+=min;
+
+    const d=new Date(r.fecha);
+    const lunes=new Date(d);
+    lunes.setDate(d.getDate()-(d.getDay()||7)+1);
+    const sem=lunes.toISOString().slice(0,10);
+    semanal[sem]=(semanal[sem]||0)+min;
+
+    const mes=r.fecha.slice(0,7);
+    mensual[mes]=(mensual[mes]||0)+min;
+  });
+
+  const wb=XLSX.utils.book_new();
+
+  const shDia=[['Fecha','Total del día']];
+  Object.keys(diario).sort().forEach(f=>{
+    const t=diario[f].min;
+    shDia.push([f,hhmm(t)]);
+  });
+
+  const shSem=[['Semana','Total']];
+  Object.keys(semanal).sort().forEach(s=>{
+    shSem.push([s,hhmm(semanal[s])]);
+  });
+
+  const shMes=[['Mes','Total']];
+  Object.keys(mensual).sort().forEach(m=>{
+    shMes.push([m,hhmm(mensual[m])]);
+  });
+
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(shDia),'Detalle diario');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(shSem),'Resumen semanal');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(shMes),'Resumen mensual');
+
+  XLSX.writeFile(wb,'reporte_horarios.xlsx');
+}
+
+function hhmm(min){
+  return String(Math.floor(min/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0');
+}
+
+function fechaEl(){ return document.getElementById('fecha'); }
+function entradaEl(){ return document.getElementById('entrada'); }
+function salidaEl(){ return document.getElementById('salida'); }
+</script>
+
+</body>
+</html>
