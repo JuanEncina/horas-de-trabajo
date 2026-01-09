@@ -13,95 +13,74 @@
 <style>
 :root{
   --primary:#6750A4;
-  --surface:#FFFFFF;
   --bg:#F4EFF4;
+  --card:#FFFFFF;
   --danger:#B3261E;
 }
-
 body{
-  font-family: system-ui, -apple-system, Roboto, sans-serif;
-  background:var(--bg);
   margin:0;
   padding:16px;
+  font-family:system-ui,Roboto,sans-serif;
+  background:var(--bg);
 }
-
 .app{
-  max-width:420px;
+  max-width:440px;
   margin:auto;
 }
-
 h1{
   text-align:center;
   color:var(--primary);
-  margin-bottom:16px;
 }
-
 .card{
-  background:var(--surface);
+  background:var(--card);
   border-radius:16px;
   padding:16px;
   box-shadow:0 2px 8px rgba(0,0,0,.1);
   margin-bottom:16px;
 }
-
 label{
   font-size:14px;
   color:#555;
 }
-
-input{
+input,select{
   width:100%;
   padding:10px;
-  font-size:16px;
-  margin-top:4px;
-  margin-bottom:12px;
+  margin:6px 0 12px;
   border-radius:8px;
   border:1px solid #ccc;
+  font-size:16px;
 }
-
 button{
   width:100%;
   padding:12px;
-  font-size:16px;
   border:none;
   border-radius:24px;
+  font-size:16px;
   cursor:pointer;
 }
-
-.btn-primary{
-  background:var(--primary);
-  color:white;
-}
-
-.btn-secondary{
-  background:#444;
-  color:white;
-  margin-top:8px;
-}
-
+.primary{ background:var(--primary); color:#fff; }
+.secondary{ background:#444; color:#fff; margin-top:8px; }
 .registro{
-  font-size:14px;
-  padding:8px 0;
   border-bottom:1px solid #eee;
+  padding:8px 0;
+  font-size:14px;
 }
-
 .registro button{
-  width:auto;
   font-size:12px;
   padding:6px 10px;
-  margin-right:4px;
+  margin-right:6px;
 }
-
-.borrar{
-  background:var(--danger);
-  color:white;
+.borrar{ background:var(--danger); color:white; }
+.resumen{
+  font-size:15px;
+  line-height:1.6;
 }
 </style>
 </head>
 
 <body>
-
 <div class="app">
+
 <h1>Registro de Horarios</h1>
 
 <div class="card">
@@ -114,11 +93,19 @@ button{
 <label>Egreso</label>
 <input type="time" id="salida">
 
-<button class="btn-primary" onclick="guardar()">Guardar</button>
-<button class="btn-secondary" onclick="generarReporte()">Generar Excel</button>
+<button class="primary" onclick="guardar()">Guardar</button>
+<button class="secondary" onclick="exportar()">Generar Excel</button>
 </div>
 
+<div class="card">
+<label>Filtrar por mes</label>
+<input type="month" id="filtroMes" onchange="render()">
+</div>
+
+<div class="card resumen" id="resumen"></div>
+
 <div class="card" id="lista"></div>
+
 </div>
 
 <script>
@@ -130,16 +117,22 @@ if ('serviceWorker' in navigator) {
 
 let registros = JSON.parse(localStorage.getItem('registros') || '[]');
 const lista = document.getElementById('lista');
+const resumen = document.getElementById('resumen');
 
 render();
 
+/* ------------------- CRUD ------------------- */
 function guardar(){
-  const f=fecha.value, e=entrada.value, s=salida.value;
-  if(!f||!e||!s) return alert('Complete todos los campos');
+  if(!fecha.value||!entrada.value||!salida.value)
+    return alert('Complete todos los campos');
 
-  registros.push({fecha:f, entrada:e, salida:s, duracion:duracion(e,s)});
-  localStorage.setItem('registros', JSON.stringify(registros));
-  render();
+  registros.push({
+    fecha:fecha.value,
+    entrada:entrada.value,
+    salida:salida.value,
+    duracion:calcDur(entrada.value,salida.value)
+  });
+  save();
 }
 
 function editar(i){
@@ -148,70 +141,104 @@ function editar(i){
   const e=prompt('Ingreso',r.entrada);
   const s=prompt('Egreso',r.salida);
   if(!f||!e||!s) return;
-  registros[i]={fecha:f,entrada:e,salida:s,duracion:duracion(e,s)};
-  localStorage.setItem('registros', JSON.stringify(registros));
-  render();
+  registros[i]={fecha:f,entrada:e,salida:s,duracion:calcDur(e,s)};
+  save();
 }
 
 function borrar(i){
-  if(!confirm('Eliminar registro?')) return;
-  registros.splice(i,1);
-  localStorage.setItem('registros', JSON.stringify(registros));
+  if(confirm('Eliminar registro?')){
+    registros.splice(i,1);
+    save();
+  }
+}
+
+function save(){
+  localStorage.setItem('registros',JSON.stringify(registros));
   render();
 }
 
+/* ------------------- RENDER ------------------- */
 function render(){
+  const mes = filtroMes.value;
+  const filtrados = mes
+    ? registros.filter(r=>r.fecha.startsWith(mes))
+    : registros;
+
+  renderResumen(filtrados);
   lista.innerHTML='<b>Registros</b>';
-  registros.forEach((r,i)=>{
+
+  filtrados.forEach((r,i)=>{
     lista.innerHTML+=`
-    <div class="registro">
-      ${r.fecha} | ${r.entrada} - ${r.salida} → ${r.duracion}<br>
-      <button onclick="editar(${i})">Editar</button>
-      <button class="borrar" onclick="borrar(${i})">Borrar</button>
-    </div>`;
+      <div class="registro">
+        ${r.fecha} | ${r.entrada} - ${r.salida} → ${r.duracion}<br>
+        <button onclick="editar(${i})">Editar</button>
+        <button class="borrar" onclick="borrar(${i})">Borrar</button>
+      </div>`;
   });
 }
 
-function duracion(e,s){
+/* ------------------- RESUMEN ------------------- */
+function renderResumen(arr){
+  if(arr.length===0){
+    resumen.innerHTML='<b>Resumen</b><br>Sin datos';
+    return;
+  }
+
+  let minutos=0;
+  const dias=new Set();
+
+  arr.forEach(r=>{
+    minutos+=toMin(r.duracion);
+    dias.add(r.fecha);
+  });
+
+  resumen.innerHTML=`
+    <b>Resumen mensual</b><br>
+    Días trabajados: ${dias.size}<br>
+    Total de horas: <b>${toHHMM(minutos)}</b>
+  `;
+}
+
+/* ------------------- EXCEL estilo pizarrón ------------------- */
+function exportar(){
+  const mes = filtroMes.value;
+  const data = mes
+    ? registros.filter(r=>r.fecha.startsWith(mes))
+    : registros;
+
+  if(data.length===0) return alert('No hay datos');
+
+  const wb=XLSX.utils.book_new();
+
+  const sheet=[['Día','Entrada','Salida','Horas trabajadas']];
+
+  let total=0;
+
+  data.forEach(r=>{
+    const d = new Date(r.fecha);
+    const dia = d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'short'});
+    total+=toMin(r.duracion);
+    sheet.push([dia,r.entrada,r.salida,r.duracion]);
+  });
+
+  sheet.push([]);
+  sheet.push(['TOTAL SEMANAL/MES','', '', toHHMM(total)]);
+
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sheet),'Horas');
+
+  XLSX.writeFile(wb,'horas_trabajadas.xlsx');
+}
+
+/* ------------------- UTILS ------------------- */
+function calcDur(e,s){
   const [h1,m1]=e.split(':').map(Number);
   const [h2,m2]=s.split(':').map(Number);
   let a=h1*60+m1, b=h2*60+m2;
   if(b<a) b+=1440;
-  const d=b-a;
-  return String(Math.floor(d/60)).padStart(2,'0')+':'+String(d%60).padStart(2,'0');
+  return toHHMM(b-a);
 }
-
-function generarReporte(){
-  if(registros.length===0) return alert('No hay datos');
-
-  const wb=XLSX.utils.book_new();
-
-  /* 🔹 NUEVA HOJA: DETALLE POR REGISTRO */
-  const detalle=[['Fecha','Ingreso','Egreso','Total']];
-  registros.forEach(r=>{
-    detalle.push([r.fecha,r.entrada,r.salida,r.duracion]);
-  });
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(detalle),'Detalle por registro');
-
-  /* 🔹 DETALLE DIARIO */
-  const diario={};
-  registros.forEach(r=>{
-    const [h,m]=r.duracion.split(':').map(Number);
-    diario[r.fecha]=(diario[r.fecha]||0)+(h*60+m);
-  });
-  const shDia=[['Fecha','Total del día']];
-  Object.keys(diario).sort().forEach(f=>{
-    shDia.push([f,hhmm(diario[f])]);
-  });
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(shDia),'Detalle diario');
-
-  XLSX.writeFile(wb,'reporte_horarios.xlsx');
-}
-
-function hhmm(min){
-  return String(Math.floor(min/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0');
-}
+const toMin=h=>{const[x,y]=h.split(':').map(Number);return x*60+y;}
+const toHHMM=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
 </script>
-
 </body>
 </html>
