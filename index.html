@@ -199,7 +199,7 @@ function renderResumen(arr){
   `;
 }
 
-/* ------------------- EXCEL estilo pizarrón ------------------- */
+/* ------------------- EXCEL con día en texto ------------------- */
 function exportar(){
   const mes = filtroMes.value;
   const data = mes
@@ -210,21 +210,24 @@ function exportar(){
 
   const wb=XLSX.utils.book_new();
 
-  const sheet=[['Día','Entrada','Salida','Horas trabajadas']];
+  const sheet=[['Fecha','Ingreso','Egreso','Total']];
 
   let total=0;
 
   data.forEach(r=>{
-    const d = new Date(r.fecha);
-    const dia = d.toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'short'});
+    const d = new Date(r.fecha+"T00:00");
+    const diaSemana = d.toLocaleDateString('es-AR',{weekday:'long'});
+    const fechaFmt = d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+    const cadena = diaSemana.charAt(0).toUpperCase()+diaSemana.slice(1)+" "+fechaFmt;
+
     total+=toMin(r.duracion);
-    sheet.push([dia,r.entrada,r.salida,r.duracion]);
+    sheet.push([cadena,r.entrada,r.salida,r.duracion]);
   });
 
   sheet.push([]);
-  sheet.push(['TOTAL SEMANAL/MES','', '', toHHMM(total)]);
+  sheet.push(['TOTAL', '', '', toHHMM(total)]);
 
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sheet),'Horas');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sheet),'Detalle');
 
   XLSX.writeFile(wb,'horas_trabajadas.xlsx');
 }
